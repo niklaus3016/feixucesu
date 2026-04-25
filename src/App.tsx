@@ -69,6 +69,8 @@ export default function App() {
   // --- Refs ---
   const testIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const phoneFrameRef = useRef<HTMLDivElement>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   // --- Helpers ---
   const getRating = (speed: number) => {
@@ -138,7 +140,14 @@ export default function App() {
       }
     }
 
-    return () => window.removeEventListener('online', detectNetwork);
+    return () => {
+      window.removeEventListener('online', detectNetwork);
+      // 清理所有定时器
+      if (testIntervalRef.current) clearInterval(testIntervalRef.current);
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      animationTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+      animationTimeoutsRef.current = [];
+    };
   }, [detectNetwork]);
 
   const saveToHistory = (result: TestResult) => {
@@ -209,9 +218,12 @@ export default function App() {
       const stepSpeed = uploadSpeedResult / steps;
       
       for (let j = 0; j < steps; j++) {
-        await new Promise(resolve => setTimeout(resolve, 100)); // 每100ms更新一次
-        currentUploadSpeed += stepSpeed;
-        setUploadSpeed(currentUploadSpeed);
+        const timeoutId = setTimeout(() => {
+          currentUploadSpeed += stepSpeed;
+          setUploadSpeed(currentUploadSpeed);
+        }, j * 100); // 每100ms更新一次
+        animationTimeoutsRef.current.push(timeoutId);
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // 4. 测试完成
@@ -264,6 +276,10 @@ export default function App() {
     let validTests = 0;
     const testCount = 3; // 增加测试次数到3次
     const speeds: number[] = [];
+    
+    // 清空之前的动画定时器
+    animationTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+    animationTimeoutsRef.current = [];
 
     for (let i = 0; i < testCount; i++) {
       const resourceUrl = resources[i % resources.length] + Math.random();
@@ -314,9 +330,12 @@ export default function App() {
           
           // 模拟速度逐渐增加的过程
           for (let j = 0; j < steps; j++) {
-            await new Promise(resolve => setTimeout(resolve, 50)); // 每50ms更新一次
-            currentSpeed += stepSpeed;
-            setDownloadSpeed(currentSpeed);
+            const timeoutId = setTimeout(() => {
+              currentSpeed += stepSpeed;
+              setDownloadSpeed(currentSpeed);
+            }, j * 50); // 每50ms更新一次
+            animationTimeoutsRef.current.push(timeoutId);
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
       } catch (error) {
@@ -334,9 +353,12 @@ export default function App() {
       const stepSpeed = defaultSpeed / steps;
       
       for (let j = 0; j < steps; j++) {
+        const timeoutId = setTimeout(() => {
+          currentSpeed += stepSpeed;
+          setDownloadSpeed(currentSpeed);
+        }, j * 50);
+        animationTimeoutsRef.current.push(timeoutId);
         await new Promise(resolve => setTimeout(resolve, 50));
-        currentSpeed += stepSpeed;
-        setDownloadSpeed(currentSpeed);
       }
       
       return defaultSpeed;
@@ -351,9 +373,12 @@ export default function App() {
     const stepSpeed = averageSpeed / steps;
     
     for (let j = 0; j < steps; j++) {
+      const timeoutId = setTimeout(() => {
+        currentSpeed += stepSpeed;
+        setDownloadSpeed(currentSpeed);
+      }, j * 50);
+      animationTimeoutsRef.current.push(timeoutId);
       await new Promise(resolve => setTimeout(resolve, 50));
-      currentSpeed += stepSpeed;
-      setDownloadSpeed(currentSpeed);
     }
 
     return averageSpeed;
@@ -361,6 +386,9 @@ export default function App() {
 
   const stopTest = () => {
     if (testIntervalRef.current) clearInterval(testIntervalRef.current);
+    // 清理所有动画定时器
+    animationTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+    animationTimeoutsRef.current = [];
     setStage('idle');
     setDownloadSpeed(0);
     setUploadSpeed(0);
@@ -424,7 +452,12 @@ export default function App() {
   // Toast notification helper
   const triggerToast = (message: string) => {
     setShowToast(message);
-    setTimeout(() => {
+    // 清理之前的定时器
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    // 设置新的定时器
+    toastTimeoutRef.current = setTimeout(() => {
       setShowToast(null);
     }, 2000);
   };
